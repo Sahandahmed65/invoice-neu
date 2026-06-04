@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoiceFlow DE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    :root {
+      --bg:#f4f6fa; --surface:#fff; --border:#e2e8f0; --border-s:#c9d4e3;
+      --text:#0f1623; --text2:#3d4d63; --muted:#7a8fa6;
+      --primary:#1845c4; --primary-l:#e8eeff; --primary-d:#1035a0;
+      --ok-bg:#ecfdf5; --ok-b:#a7f3d0; --ok-t:#065f46;
+      --err-bg:#fef2f2; --err-b:#fecaca; --err-t:#991b1b;
+      --warn-bg:#fffbeb; --warn-b:#fcd34d; --warn-t:#92400e;
+      --info-bg:#eff6ff; --info-b:#bfdbfe; --info-t:#1e40af;
+      --sh:0 1px 3px rgba(15,22,35,.07),0 1px 2px rgba(15,22,35,.05);
+      --sh-m:0 4px 16px rgba(15,22,35,.08);
+      --sh-l:0 12px 40px rgba(15,22,35,.14);
+      --r:14px; --r-s:8px; --font:'DM Sans',system-ui,sans-serif; --mono:'DM Mono',monospace;
+      --sidebar:270px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+    /* ── Auth Screen ── */
+    #auth-screen{
+      display:flex;align-items:center;justify-content:center;
+      min-height:100vh;background:linear-gradient(135deg,#0b1628 0%,#1a2d5a 100%);
+      padding:20px;
+    }
+    .auth-card{
+      background:white;border-radius:20px;padding:40px 36px;width:min(100%,420px);
+      box-shadow:var(--sh-l);
+    }
+    .auth-logo{font-size:22px;font-weight:800;color:var(--primary);margin-bottom:6px}
+    .auth-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
+    .auth-tabs{display:flex;gap:0;margin-bottom:24px;background:var(--bg);border-radius:10px;padding:3px}
+    .auth-tab{flex:1;border:0;background:transparent;padding:9px;border-radius:8px;font:600 13px var(--font);cursor:pointer;color:var(--muted);transition:all .15s}
+    .auth-tab.active{background:white;color:var(--text);box-shadow:var(--sh)}
+    .auth-form{display:grid;gap:14px}
+    #auth-screen .field{display:flex;flex-direction:column;gap:5px}
+    #auth-screen .label{font-size:12px;font-weight:700;color:var(--text2)}
+    #auth-screen .input{border:1px solid var(--border);border-radius:9px;padding:10px 13px;font:14px var(--font);color:var(--text);outline:none;transition:border .15s,box-shadow .15s}
+    #auth-screen .input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(24,69,196,.12)}
+    .auth-btn{width:100%;border:0;background:var(--primary);color:white;border-radius:10px;padding:12px;font:700 14px var(--font);cursor:pointer;transition:background .15s;margin-top:6px}
+    .auth-btn:hover{background:var(--primary-d)}
+    .auth-btn:disabled{opacity:.5;cursor:not-allowed}
+    .auth-msg{font-size:13px;padding:10px 13px;border-radius:9px;display:none}
+    .auth-msg.ok{background:var(--ok-bg);color:var(--ok-t);display:block}
+    .auth-msg.err{background:var(--err-bg);color:var(--err-t);display:block}
+    .auth-divider{text-align:center;color:var(--muted);font-size:12px;margin:4px 0}
+
+    /* ── App Shell ── */
+    #app-screen{display:none}
+    #app-screen.visible{display:grid;grid-template-columns:var(--sidebar) 1fr;min-height:100vh}
+
+    /* ── Sidebar ── */
+    .sidebar{background:#0b1628;color:#cbd5e1;display:flex;flex-direction:column;padding:20px 16px;gap:6px;position:sticky;top:0;height:100vh;overflow-y:auto}
+    .brand{padding:14px 12px 16px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:8px}
+    .brand-name{font-size:17px;font-weight:800;color:white;letter-spacing:-.3px}
+    .brand-sub{font-size:11.5px;color:#64748b;margin-top:3px}
+    .nav-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475569;padding:14px 12px 6px}
+    .nav-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:#94a3b8;text-align:left;padding:10px 12px;border-radius:10px;font:600 13.5px var(--font);cursor:pointer;transition:all .15s}
+    .nav-btn:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+    .nav-btn.active{background:rgba(24,69,196,.25);color:#93c5fd}
+    .nav-btn .icon{font-size:16px;width:20px;text-align:center}
+    .sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:#475569;line-height:1.7}
+    .user-badge{background:rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;font-size:12px;color:#94a3b8;margin-bottom:8px;word-break:break-all}
+    .user-badge strong{display:block;color:white;font-size:13px;margin-bottom:2px}
+
+    /* ── Main ── */
+    .main{padding:28px 32px;overflow:auto}
+    .page-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:24px}
+    .page-header h2{font-size:24px;font-weight:800;letter-spacing:-.4px}
+    .page-header p{font-size:13px;color:var(--muted);margin-top:3px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+    /* ── Views ── */
+    .view{display:none}.view.active{display:grid;gap:20px}
+
+    /* ── Cards ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh)}
+    .card-pad{padding:20px 22px}
+    .card-title{font-size:16px;font-weight:700;margin-bottom:16px;letter-spacing:-.2px}
+
+    /* ── Grids ── */
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .fg2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    .full{grid-column:1/-1}
+
+    /* ── Stats ── */
+    .stat-label{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+    .stat-value{font-size:28px;font-weight:800;letter-spacing:-.5px}
+    .stat-sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+    /* ── Buttons ── */
+    .btn{border:0;border-radius:10px;padding:9px 15px;font:600 13px var(--font);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:var(--primary);color:white}
+    .btn-primary:hover:not(:disabled){background:var(--primary-d)}
+    .btn-secondary{background:white;color:var(--text);border:1px solid var(--border)}
+    .btn-secondary:hover:not(:disabled){background:var(--bg);border-color:var(--border-s)}
+    .btn-danger{background:var(--err-bg);color:var(--err-t);border:1px solid var(--err-b)}
+    .btn-danger:hover:not(:disabled){background:#fee2e2}
+    .btn-ghost{background:transparent;color:var(--text2);border:0;padding:7px 10px}
+    .btn-ghost:hover{background:var(--bg)}
+    .btn-sm{padding:6px 11px;font-size:12px;border-radius:8px}
+    .btn-icon{padding:7px;border-radius:8px}
+
+    /* ── Fields ── */
+    .field{display:flex;flex-direction:column;gap:5px}
+    .label{font-size:12px;font-weight:700;color:var(--text2)}
+    .input,.select,.textarea{width:100%;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font:14px var(--font);color:var(--text);background:white;transition:border .15s,box-shadow .15s;outline:none}
+    .input:focus,.select:focus,.textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(24,69,196,.12)}
+    .textarea{min-height:80px;resize:vertical}
+
+    /* ── Alerts ── */
+    .alert{padding:11px 14px;border-radius:10px;font-size:13px;line-height:1.5}
+    .alert-info{background:var(--info-bg);border:1px solid var(--info-b);color:var(--info-t)}
+    .alert-ok{background:var(--ok-bg);border:1px solid var(--ok-b);color:var(--ok-t)}
+    .alert-warn{background:var(--warn-bg);border:1px solid var(--warn-b);color:var(--warn-t)}
+    .alert-err{background:var(--err-bg);border:1px solid var(--err-b);color:var(--err-t)}
+    .alert ul{margin:6px 0 0 18px}.alert li{margin-bottom:2px}
+
+    /* ── Table ── */
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13.5px}
+    th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
+    td{text-align:left;padding:12px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+    tr:hover td{background:#fafbfd}
+    .td-actions{display:flex;gap:6px;align-items:center}
+
+    /* ── Badges ── */
+    .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+    .badge-ok{background:var(--ok-bg);color:var(--ok-t);border:1px solid var(--ok-b)}
+    .badge-err{background:var(--err-bg);color:var(--err-t);border:1px solid var(--err-b)}
+
+    /* ── Inv Number ── */
+    .inv-nr{font-family:var(--mono);font-size:12px;background:var(--primary-l);color:var(--primary);padding:4px 9px;border-radius:7px;font-weight:600}
+
+    /* ── Position Rows ── */
+    .pos-row{display:grid;grid-template-columns:3fr 80px 110px 80px 110px 36px;gap:8px;align-items:end;padding:12px 0;border-bottom:1px solid #f1f5f9}
+    .pos-row:last-child{border-bottom:0}
+    .pos-header{display:grid;grid-template-columns:3fr 80px 110px 80px 110px 36px;gap:8px;padding:0 0 8px;border-bottom:2px solid var(--border)}
+    .pos-header span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+
+    /* ── Summary ── */
+    .summary{display:grid;gap:8px;width:min(100%,340px);justify-self:end}
+    .sum-row{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+    .sum-total{font-size:18px;font-weight:800;padding-top:10px;border-top:2px solid var(--border)}
+
+    /* ── Toast ── */
+    #toasts{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:10px}
+    .toast{background:#0f1623;color:white;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:var(--sh-l);opacity:0;transform:translateY(12px);transition:all .25s;max-width:360px}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast.t-ok{border-left:4px solid #34d399}
+    .toast.t-err{border-left:4px solid #f87171}
+    .toast.t-info{border-left:4px solid #60a5fa}
+
+    /* ── Modal ── */
+    .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+    .modal-ov.open{display:flex}
+    .modal{background:white;border-radius:20px;padding:28px;width:min(100%,520px);box-shadow:var(--sh-l)}
+    .modal-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+    .modal-title{font-size:18px;font-weight:800}
+    .modal-ft{margin-top:22px;display:flex;justify-content:flex-end;gap:10px}
+
+    /* ── Loading spinner ── */
+    .spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.8);z-index:200;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+    .loading-overlay.show{display:flex}
+    .loading-overlay p{font-weight:600;color:var(--text2)}
+
+    /* ── Chart ── */
+    .chart-box{position:relative;height:200px}
+
+    /* ── Mobile ── */
+    .mob-toggle{display:none}
+    @media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:860px){
+      #app-screen.visible{grid-template-columns:1fr}
+      .sidebar{position:fixed;inset:0 auto 0 0;width:min(82vw,280px);z-index:50;transform:translateX(-105%);transition:transform .22s ease;height:100%}
+      .sidebar.open{transform:translateX(0);box-shadow:var(--sh-l)}
+      .mob-toggle{display:flex}
+      .main{padding:18px 16px}
+      .g2,.fg2{grid-template-columns:1fr}
+      .g3{grid-template-columns:repeat(2,1fr)}
+      .pos-row,.pos-header{grid-template-columns:1fr}
+      .pos-header{display:none}
+    }
+    @media(max-width:560px){.g3,.g4{grid-template-columns:1fr}}
+
+    /* ── Misc ── */
+    hr.div{border:0;border-top:1px solid var(--border)}
+    .muted{color:var(--muted)}.text-sm{font-size:12.5px}.mono{font-family:var(--mono)}
+    .empty{text-align:center;padding:40px 20px;color:var(--muted)}
+    .empty .ei{font-size:36px;margin-bottom:10px}
+    .chip{display:inline-flex;align-items:center;background:var(--primary-l);color:var(--primary);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700}
+    .ov-bg{position:fixed;inset:0;z-index:49;display:none}
+    .ov-bg.open{display:block}
+  </style>
+</head>
+<body>
+
+<!-- ════ LOADING OVERLAY ════ -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner" style="width:32px;height:32px;border-color:rgba(24,69,196,.2);border-top-color:var(--primary)"></div>
+  <p id="loadingMsg">Verbinde mit Datenbank …</p>
+</div>
+
+<!-- ════ AUTH SCREEN ════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">InvoiceFlow DE</div>
+    <div class="auth-sub">Rechnungsverwaltung · Sicherer Zugang</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin" onclick="showTab('login')">Anmelden</button>
+      <button class="auth-tab" id="tabRegister" onclick="showTab('register')">Registrieren</button>
+    </div>
+
+    <!-- Login -->
+    <div id="formLogin" class="auth-form">
+      <div id="loginMsg" class="auth-msg"></div>
+      <div class="field">
+        <label class="label">E-Mail-Adresse</label>
+        <input id="loginEmail" class="input" type="email" placeholder="admin@beispiel.de" autocomplete="email">
+      </div>
+      <div class="field">
+        <label class="label">Passwort</label>
+        <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="auth-btn" id="loginBtn" onclick="doLogin()">Anmelden</button>
+      <div class="auth-divider">oder</div>
+      <button class="auth-btn" style="background:#1a1a1a" onclick="doMagicLink()">Magic Link per E-Mail</button>
+    </div>
+
+    <!-- Register -->
+    <div id="formRegister" class="auth-form" style="display:none">
+      <div id="registerMsg" class="auth-msg"></div>
+      <div class="alert alert-info" style="font-size:12.5px">Für den ersten Zugang ein Konto erstellen. Danach nur noch anmelden.</div>
+      <div class="field">
+        <label class="label">E-Mail-Adresse</label>
+        <input id="regEmail" class="input" type="email" placeholder="deine@email.de">
+      </div>
+      <div class="field">
+        <label class="label">Passwort (min. 8 Zeichen)</label>
+        <input id="regPassword" class="input" type="password" placeholder="Sicheres Passwort wählen">
+      </div>
+      <div class="field">
+        <label class="label">Passwort wiederholen</label>
+        <input id="regPassword2" class="input" type="password" placeholder="Passwort bestätigen">
+      </div>
+      <button class="auth-btn" id="registerBtn" onclick="doRegister()">Konto erstellen</button>
+    </div>
+
+    <p style="margin-top:16px;font-size:11px;color:var(--muted);text-align:center">
+      Alle Daten werden verschlüsselt in der EU (Frankfurt) gespeichert.
+    </p>
+  </div>
+</div>
+
+<!-- ════ APP SCREEN ════ -->
+<div id="app-screen">
+  <div class="ov-bg" id="ovBg"></div>
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-name">InvoiceFlow DE</div>
+      <div class="brand-sub">Rechnungsverwaltung</div>
+    </div>
+    <div class="user-badge">
+      <strong id="userEmail">–</strong>
+      Eingeloggt
+    </div>
+    <span class="nav-label">Verwaltung</span>
+    <button class="nav-btn active" data-view="dashboard"><span class="icon">📊</span> Dashboard</button>
+    <button class="nav-btn" data-view="new"><span class="icon">➕</span> Neue Rechnung</button>
+    <button class="nav-btn" data-view="invoices"><span class="icon">🗂</span> Rechnungen</button>
+    <button class="nav-btn" data-view="customers"><span class="icon">👤</span> Kunden</button>
+    <button class="nav-btn" data-view="articles"><span class="icon">📦</span> Artikelkatalog</button>
+    <span class="nav-label">System</span>
+    <button class="nav-btn" data-view="settings"><span class="icon">⚙️</span> Einstellungen</button>
+    <button class="nav-btn" onclick="doLogout()" style="color:#f87171"><span class="icon">🚪</span> Abmelden</button>
+    <div class="sidebar-footer">
+      Stornierung statt Löschen · § 19 UStG · Daten in Supabase EU (Frankfurt)
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+    <div class="page-header" id="pageHeader">
+      <div>
+        <button class="btn btn-secondary btn-sm mob-toggle" id="menuBtn">☰ Menü</button>
+        <h2 id="pageTitle">Dashboard</h2>
+        <p id="pageDesc">Willkommen zurück.</p>
+      </div>
+      <div class="toolbar" id="pageActions"></div>
+    </div>
+
+    <!-- ── DASHBOARD ── -->
+    <section class="view active" id="view-dashboard">
+      <div class="g4">
+        <div class="card card-pad"><div class="stat-label">Rechnungen gesamt</div><div class="stat-value" id="kpiTotal">–</div></div>
+        <div class="card card-pad"><div class="stat-label">Aktive Rechnungen</div><div class="stat-value" id="kpiActive">–</div></div>
+        <div class="card card-pad"><div class="stat-label">Storniert</div><div class="stat-value" id="kpiCancelled">–</div></div>
+        <div class="card card-pad"><div class="stat-label">Gesamtumsatz</div><div class="stat-value" id="kpiRevenue">–</div></div>
+      </div>
+      <div class="g2">
+        <div class="card card-pad">
+          <div class="card-title">Letzte Rechnungen</div>
+          <div class="table-wrap"><table><thead><tr><th>Nr.</th><th>Kunde</th><th>Datum</th><th>Betrag</th><th>Status</th></tr></thead><tbody id="dashRecent"></tbody></table></div>
+          <div style="margin-top:14px"><button class="btn btn-ghost btn-sm" data-view="invoices">Alle anzeigen →</button></div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title">Umsatz (12 Monate)</div>
+          <div class="chart-box"><canvas id="revenueChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── NEUE RECHNUNG ── -->
+    <section class="view" id="view-new">
+      <div class="g2">
+        <div class="card card-pad">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="card-title" style="margin:0">Rechnungsdaten</div>
+            <span class="chip" id="draftNrBadge">RE-…</span>
+          </div>
+          <div id="valAlert" class="alert alert-err" style="display:none;margin-bottom:14px"></div>
+          <div class="fg2">
+            <div class="field"><label class="label">Kunde</label><select id="draftCustomer" class="select"></select></div>
+            <div class="field"><label class="label">Rechnungsart</label>
+              <select id="draftType" class="select">
+                <option value="standard">Standardrechnung</option>
+                <option value="small">Kleinbetragsrechnung (≤ 250 €)</option>
+              </select>
+            </div>
+            <div class="field"><label class="label">Rechnungsdatum *</label><input id="draftDate" type="date" class="input"></div>
+            <div class="field"><label class="label">Leistungsdatum *</label><input id="draftServiceDate" type="date" class="input"></div>
+            <div class="field full"><label class="label">Zahlungshinweis / Freitext</label>
+              <textarea id="draftNote" class="textarea" placeholder="z. B. Zahlbar innerhalb von 14 Tagen ohne Abzug."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title">Steuerhinweis</div>
+          <div id="taxHintBox" class="alert alert-info">Steuerregel wird aus den Einstellungen übernommen.</div>
+          <div style="margin-top:16px">
+            <div class="card-title" style="font-size:14px;margin-bottom:8px">Kundenvorschau</div>
+            <div id="custPreview" class="text-sm muted">Kein Kunde ausgewählt.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-title" style="margin:0">Positionen</div>
+          <button class="btn btn-secondary btn-sm" id="addPosBtn">+ Position</button>
+        </div>
+        <div class="pos-header">
+          <span>Beschreibung</span><span>Menge</span><span>Einzelpreis</span><span>MwSt %</span><span>Gesamt netto</span><span></span>
+        </div>
+        <div id="posRows"></div>
+        <div class="summary" style="margin-top:18px">
+          <div class="sum-row"><span class="muted">Netto</span><strong id="sumNet">0,00 €</strong></div>
+          <div class="sum-row"><span class="muted">Steuer</span><strong id="sumTax">0,00 €</strong></div>
+          <div class="sum-row sum-total"><span>Gesamtbetrag</span><strong id="sumGross">0,00 €</strong></div>
+        </div>
+        <hr class="div" style="margin:18px 0">
+        <div style="display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn btn-secondary" id="resetDraftBtn">Zurücksetzen</button>
+          <button class="btn btn-primary" id="saveInvoiceBtn">Festschreiben &amp; PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── RECHNUNGEN ── -->
+    <section class="view" id="view-invoices">
+      <div class="card card-pad">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div class="card-title" style="margin:0">Rechnungsübersicht</div>
+          <input id="invSearch" class="input" style="max-width:300px" placeholder="Suche nach Nr., Kunde, Datum …">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nr.</th><th>Datum</th><th>Leistung</th><th>Kunde</th><th>Netto</th><th>MwSt</th><th>Brutto</th><th>Status</th><th>Aktionen</th></tr></thead>
+            <tbody id="invTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── KUNDEN ── -->
+    <section class="view" id="view-customers">
+      <div class="g2">
+        <div class="card card-pad">
+          <div id="custFormTitle" class="card-title">Neuen Kunden anlegen</div>
+          <div class="fg2">
+            <input type="hidden" id="editCustId">
+            <div class="field full"><label class="label">Name / Firma *</label><input id="cName" class="input" placeholder="Max Mustermann"></div>
+            <div class="field full"><label class="label">Straße &amp; Hausnummer</label><input id="cStreet" class="input"></div>
+            <div class="field"><label class="label">PLZ</label><input id="cZip" class="input" placeholder="12345"></div>
+            <div class="field"><label class="label">Ort</label><input id="cCity" class="input"></div>
+            <div class="field"><label class="label">E-Mail</label><input id="cEmail" class="input" type="email"></div>
+            <div class="field"><label class="label">Telefon</label><input id="cPhone" class="input"></div>
+            <div class="field full"><label class="label">Notiz</label><textarea id="cNote" class="textarea" style="min-height:56px"></textarea></div>
+          </div>
+          <div class="toolbar" style="margin-top:14px">
+            <button class="btn btn-primary" id="saveCustBtn">Kunde speichern</button>
+            <button class="btn btn-secondary" id="cancelCustEditBtn" style="display:none">Abbrechen</button>
+            <button class="btn btn-ghost" id="clearCustBtn">Leeren</button>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <div class="card-title" style="margin:0">Kunden (<span id="custCount">0</span>)</div>
+            <input id="custSearch" class="input" style="max-width:170px;font-size:12.5px;padding:7px 10px" placeholder="Suchen …">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Ort</th><th>Kontakt</th><th>Aktionen</th></tr></thead>
+              <tbody id="custTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ARTIKELKATALOG ── -->
+    <section class="view" id="view-articles">
+      <div class="g2">
+        <div class="card card-pad">
+          <div id="artFormTitle" class="card-title">Neuen Artikel anlegen</div>
+          <div class="fg2">
+            <input type="hidden" id="editArtId">
+            <div class="field full"><label class="label">Artikelname *</label><input id="aName" class="input" placeholder="z. B. PC-Diagnose, Arbeitsstunde"></div>
+            <div class="field full"><label class="label">Beschreibung</label><textarea id="aDesc" class="textarea" style="min-height:56px" placeholder="Wird als Positionsbeschreibung vorausgefüllt"></textarea></div>
+            <div class="field"><label class="label">Einzelpreis (€ netto)</label><input id="aPrice" class="input" type="number" step="0.01" min="0" value="0"></div>
+            <div class="field"><label class="label">MwSt %</label><input id="aTax" class="input" type="number" step="1" min="0" value="19"></div>
+            <div class="field"><label class="label">Einheit</label><input id="aUnit" class="input" placeholder="Std., Stück, Pauschal …" value="Std."></div>
+          </div>
+          <div class="toolbar" style="margin-top:14px">
+            <button class="btn btn-primary" id="saveArtBtn">Artikel speichern</button>
+            <button class="btn btn-secondary" id="cancelArtEditBtn" style="display:none">Abbrechen</button>
+            <button class="btn btn-ghost" id="clearArtBtn">Leeren</button>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title">Artikelliste (<span id="artCount">0</span>)</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Preis</th><th>MwSt</th><th>Einheit</th><th>Aktionen</th></tr></thead>
+              <tbody id="artTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── EINSTELLUNGEN ── -->
+    <section class="view" id="view-settings">
+      <div class="g2">
+        <div class="card card-pad">
+          <div class="card-title">Unternehmensdaten</div>
+          <div class="fg2">
+            <div class="field full"><label class="label">Firmenname *</label><input id="s_company_name" class="input"></div>
+            <div class="field full"><label class="label">Straße &amp; Hausnummer *</label><input id="s_company_street" class="input"></div>
+            <div class="field"><label class="label">PLZ *</label><input id="s_company_zip" class="input"></div>
+            <div class="field"><label class="label">Ort *</label><input id="s_company_city" class="input"></div>
+            <div class="field"><label class="label">E-Mail</label><input id="s_company_email" class="input" type="email"></div>
+            <div class="field"><label class="label">Telefon</label><input id="s_company_phone" class="input"></div>
+            <div class="field"><label class="label">Steuernummer</label><input id="s_company_tax_nr" class="input"></div>
+            <div class="field"><label class="label">USt-IdNr.</label><input id="s_company_vat_id" class="input"></div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-title">Bank &amp; Steuer</div>
+          <div class="fg2">
+            <div class="field full"><label class="label">Bank</label><input id="s_company_bank" class="input"></div>
+            <div class="field full"><label class="label">IBAN</label><input id="s_company_iban" class="input"></div>
+            <div class="field"><label class="label">BIC</label><input id="s_company_bic" class="input"></div>
+            <div class="field">
+              <label class="label">Steuerregel</label>
+              <select id="s_tax_mode" class="select">
+                <option value="vat19">Regelbesteuerung 19 %</option>
+                <option value="vat7">Regelbesteuerung 7 %</option>
+                <option value="kleinunternehmer">Kleinunternehmer § 19 UStG</option>
+              </select>
+            </div>
+            <div class="field"><label class="label">Nächste Rechnungsnr.</label><input id="s_next_number" class="input" type="number" min="1"></div>
+            <div class="field full"><label class="label">Nummernpräfix</label><input id="s_number_prefix" class="input" placeholder="RE-2026"></div>
+          </div>
+          <div class="toolbar" style="margin-top:18px">
+            <button class="btn btn-primary" id="saveSettingsBtn">Einstellungen speichern</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportCSV()">CSV Export</button>
+          </div>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-title">E-Mail-Vorlage</div>
+        <div class="fg2">
+          <div class="field"><label class="label">Betreff</label><input id="s_email_subject" class="input" placeholder="Rechnung {{nummer}} vom {{datum}}"></div>
+          <div class="field full"><label class="label">Text (Platzhalter: {{nummer}}, {{datum}}, {{betrag}}, {{firma}}, {{iban}}, {{bic}})</label>
+            <textarea id="s_email_body" class="textarea"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ── Storno-Modal ── -->
+<div class="modal-ov" id="cancelModal">
+  <div class="modal">
+    <div class="modal-hd"><div class="modal-title">Rechnung stornieren</div><button class="btn btn-ghost btn-icon" onclick="closeModal('cancelModal')">✕</button></div>
+    <p>Rechnung <strong id="cancelNr"></strong> wirklich stornieren?</p>
+    <div class="alert alert-warn" style="margin-top:12px">Die Rechnung bleibt archiviert und wird als storniert markiert.</div>
+    <div class="field" style="margin-top:14px">
+      <label class="label">Stornierungsgrund (optional)</label>
+      <textarea id="cancelReason" class="textarea" style="min-height:60px" placeholder="z. B. Auftrag storniert, fehlerhafte Angaben …"></textarea>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-secondary" onclick="closeModal('cancelModal')">Abbrechen</button>
+      <button class="btn btn-danger" id="confirmCancelBtn">Stornieren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     KONFIGURATION – HIER DEINE SUPABASE-DATEN EINTRAGEN
+════════════════════════════════════════════════════════════════ -->
+<script>
+// ⚠️ ERSETZE DIESE BEIDEN WERTE mit deinen echten Supabase-Projektdaten
+// Zu finden unter: Supabase Dashboard → Settings → API
+const SUPABASE_URL  = https://qdouwckoqxmwjqhqebya.supabase.co;
+const SUPABASE_ANON = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkb3V3Y2tvcXhtd2pxaHFlYnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MjkzMTIsImV4cCI6MjA5NjEwNTMxMn0.EGiQ1P6nchhqB68M60n7L-ViW4NeW_4tauYJhROiMMU;
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+//  SUPABASE INIT
+// ════════════════════════════════════════════════════════════════
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── State ──
+let currentUser = null;
+let appSettings = null;
+let allCustomers = [];
+let allInvoices  = [];
+let allArticles  = [];
+let draftItems   = [];
+let editingCustId = null;
+let editingArtId  = null;
+let cancelTargetId = null;
+let revenueChart = null;
+
+// ════════════════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════════════════
+const euro = n => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(Number(n)||0);
+const fmtDate = v => v ? new Date(v+'T12:00:00').toLocaleDateString('de-DE') : '–';
+const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function effectiveTaxRate() {
+  if (!appSettings) return 19;
+  if (appSettings.tax_mode === 'kleinunternehmer') return 0;
+  if (appSettings.tax_mode === 'vat7') return 7;
+  return 19;
+}
+
+function nextInvNr() {
+  if (!appSettings) return 'RE-?';
+  const p = appSettings.number_prefix || 'RE-'+new Date().getFullYear();
+  return p+'-'+String(appSettings.next_number||1).padStart(4,'0');
+}
+
+function interpolateEmail(tmpl, inv) {
+  const c = inv.company_snap||{};
+  return (tmpl||'')
+    .replace(/{{nummer}}/g, inv.number||'')
+    .replace(/{{datum}}/g, fmtDate(inv.date))
+    .replace(/{{betrag}}/g, euro(inv.total_gross))
+    .replace(/{{firma}}/g, c.company_name||'')
+    .replace(/{{iban}}/g, c.company_iban||'')
+    .replace(/{{bic}}/g, c.company_bic||'');
+}
+
+function showLoading(msg='Laden …') {
+  document.getElementById('loadingMsg').textContent = msg;
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+// ════════════════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════════════════
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast t-${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('show')));
+  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },3800);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════════
+function showTab(t) {
+  document.getElementById('formLogin').style.display    = t==='login'    ? 'grid' : 'none';
+  document.getElementById('formRegister').style.display = t==='register' ? 'grid' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', t==='login');
+  document.getElementById('tabRegister').classList.toggle('active', t==='register');
+}
+
+function setAuthMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'auth-msg ' + type;
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pw    = document.getElementById('loginPassword').value;
+  if (!email || !pw) { setAuthMsg('loginMsg','E-Mail und Passwort eingeben.','err'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Anmelden …';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  btn.disabled = false; btn.textContent = 'Anmelden';
+  if (error) setAuthMsg('loginMsg', error.message, 'err');
+}
+
+async function doMagicLink() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { setAuthMsg('loginMsg','Bitte E-Mail-Adresse eingeben.','err'); return; }
+  const { error } = await sb.auth.signInWithOtp({ email });
+  if (error) setAuthMsg('loginMsg', error.message, 'err');
+  else setAuthMsg('loginMsg','Magic Link wurde an '+email+' gesendet. Klicke den Link in der E-Mail.','ok');
+}
+
+async function doRegister() {
+  const email = document.getElementById('regEmail').value.trim();
+  const pw    = document.getElementById('regPassword').value;
+  const pw2   = document.getElementById('regPassword2').value;
+  if (pw !== pw2) { setAuthMsg('registerMsg','Passwörter stimmen nicht überein.','err'); return; }
+  if (pw.length < 8) { setAuthMsg('registerMsg','Passwort muss mind. 8 Zeichen lang sein.','err'); return; }
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Erstellen …';
+  const { error } = await sb.auth.signUp({ email, password: pw });
+  btn.disabled = false; btn.textContent = 'Konto erstellen';
+  if (error) setAuthMsg('registerMsg', error.message, 'err');
+  else setAuthMsg('registerMsg','Konto erstellt! Bitte bestätige deine E-Mail-Adresse.','ok');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// ── Auth State Listener ──
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    currentUser = session.user;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app-screen').classList.add('visible');
+    document.getElementById('userEmail').textContent = currentUser.email;
+    await initApp();
+  } else {
+    currentUser = null;
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app-screen').classList.remove('visible');
+    hideLoading();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  APP INIT – alle Daten laden
+// ════════════════════════════════════════════════════════════════
+async function initApp() {
+  showLoading('Lade Daten …');
+  try {
+    await Promise.all([loadSettings(), loadCustomers(), loadInvoices(), loadArticles()]);
+    renderDashboard();
+    fillSettings();
+  } catch(e) {
+    toast('Fehler beim Laden: '+e.message, 'err');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════════
+const pagesMeta = {
+  dashboard:{ title:'Dashboard',          desc:'Überblick über Umsatz und Rechnungen.'      },
+  new:      { title:'Neue Rechnung',       desc:'Rechnung erstellen und festschreiben.'       },
+  invoices: { title:'Rechnungen',          desc:'Alle Rechnungen durchsuchen und verwalten.'  },
+  customers:{ title:'Kunden',              desc:'Kunden anlegen, bearbeiten, verwalten.'      },
+  articles: { title:'Artikelkatalog',      desc:'Wiederkehrende Leistungen vorhalten.'        },
+  settings: { title:'Einstellungen',       desc:'Unternehmensdaten, Bank, Steuerregel.'       }
+};
+
+let currentView = 'dashboard';
+function switchView(id) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+id)?.classList.add('active');
+  document.querySelectorAll(`[data-view="${id}"]`).forEach(b=>b.classList.add('active'));
+  const m = pagesMeta[id];
+  if (m) { document.getElementById('pageTitle').textContent=m.title; document.getElementById('pageDesc').textContent=m.desc; }
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('ovBg').classList.remove('open');
+  currentView = id;
+  if (id==='dashboard') renderDashboard();
+  if (id==='new') prepareDraft();
+  if (id==='invoices') renderInvoices();
+  if (id==='customers') renderCustomers();
+  if (id==='articles') renderArticles();
+  if (id==='settings') fillSettings();
+}
+
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+document.getElementById('menuBtn').addEventListener('click',()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('ovBg').classList.toggle('open', document.getElementById('sidebar').classList.contains('open'));
+});
+document.getElementById('ovBg').addEventListener('click',()=>{
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('ovBg').classList.remove('open');
+});
+
+// ════════════════════════════════════════════════════════════════
+//  SETTINGS
+// ════════════════════════════════════════════════════════════════
+async function loadSettings() {
+  const { data, error } = await sb.from('settings').select('*').eq('user_id', currentUser.id).single();
+  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+  appSettings = data || null;
+}
+
+function fillSettings() {
+  if (!appSettings) return;
+  const fields = ['company_name','company_street','company_zip','company_city','company_email','company_phone',
+                  'company_tax_nr','company_vat_id','company_bank','company_iban','company_bic',
+                  'tax_mode','next_number','number_prefix','email_subject','email_body'];
+  fields.forEach(k => {
+    const el = document.getElementById('s_'+k);
+    if (el) el.value = appSettings[k] ?? '';
+  });
+}
+
+document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+  const fields = ['company_name','company_street','company_zip','company_city','company_email','company_phone',
+                  'company_tax_nr','company_vat_id','company_bank','company_iban','company_bic',
+                  'tax_mode','next_number','number_prefix','email_subject','email_body'];
+  const data = { user_id: currentUser.id };
+  fields.forEach(k => {
+    const el = document.getElementById('s_'+k);
+    if (!el) return;
+    data[k] = (k==='next_number') ? parseInt(el.value)||1 : el.value;
+  });
+  const { error } = await sb.from('settings').upsert(data, { onConflict: 'user_id' });
+  if (error) { toast('Fehler: '+error.message,'err'); return; }
+  appSettings = { ...appSettings, ...data };
+  toast('Einstellungen gespeichert.','ok');
+});
+
+// ════════════════════════════════════════════════════════════════
+//  CUSTOMERS
+// ════════════════════════════════════════════════════════════════
+async function loadCustomers() {
+  const { data, error } = await sb.from('customers').select('*').eq('user_id', currentUser.id).order('name');
+  if (error) throw error;
+  allCustomers = data || [];
+}
+
+function renderCustomers() {
+  const q = (document.getElementById('custSearch')?.value||'').toLowerCase();
+  const list = allCustomers.filter(c => !q || [c.name,c.city,c.email,c.phone].join(' ').toLowerCase().includes(q));
+  document.getElementById('custCount').textContent = allCustomers.length;
+  const tbody = document.getElementById('custTable');
+  tbody.innerHTML = list.length ? list.map(c => `
+    <tr>
+      <td><strong>${esc(c.name)}</strong>${c.note?`<br><span class="muted text-sm">${esc(c.note)}</span>`:''}</td>
+      <td>${[c.zip,c.city].filter(Boolean).join(' ')||'–'}</td>
+      <td>${c.email?`<a href="mailto:${esc(c.email)}" style="color:var(--primary)">${esc(c.email)}</a>`:(c.phone||'–')}</td>
+      <td><div class="td-actions">
+        <button class="btn btn-secondary btn-sm" onclick="startEditCust('${c.id}')">Bearbeiten</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCust('${c.id}')">Entfernen</button>
+      </div></td>
+    </tr>`).join('')
+    : '<tr><td colspan="4" class="empty">Keine Kunden gefunden.</td></tr>';
+  fillCustSelect();
+}
+
+function fillCustSelect() {
+  const sel = document.getElementById('draftCustomer');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">– Ohne Kundenangabe –</option>` +
+    allCustomers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}
+
+function clearCustForm() {
+  ['cName','cStreet','cZip','cCity','cEmail','cPhone','cNote'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('editCustId').value='';
+  editingCustId=null;
+  document.getElementById('custFormTitle').textContent='Neuen Kunden anlegen';
+  document.getElementById('cancelCustEditBtn').style.display='none';
+}
+
+document.getElementById('saveCustBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('cName').value.trim();
+  if (!name) { toast('Bitte einen Namen eingeben.','err'); return; }
+  const row = {
+    user_id: currentUser.id,
+    name,
+    street: document.getElementById('cStreet').value.trim(),
+    zip:    document.getElementById('cZip').value.trim(),
+    city:   document.getElementById('cCity').value.trim(),
+    email:  document.getElementById('cEmail').value.trim(),
+    phone:  document.getElementById('cPhone').value.trim(),
+    note:   document.getElementById('cNote').value.trim()
+  };
+  let error;
+  if (editingCustId) {
+    ({ error } = await sb.from('customers').update(row).eq('id', editingCustId).eq('user_id', currentUser.id));
+    if (!error) { const i=allCustomers.findIndex(c=>c.id===editingCustId); if(i!==-1) allCustomers[i]={...allCustomers[i],...row}; }
+    toast(`Kunde „${name}" aktualisiert.`,'ok');
+  } else {
+    const { data, error: e } = await sb.from('customers').insert(row).select().single();
+    error=e;
+    if (!e) allCustomers.push(data);
+    toast(`Kunde „${name}" gespeichert.`,'ok');
+  }
+  if (error) { toast('Fehler: '+error.message,'err'); return; }
+  clearCustForm();
+  allCustomers.sort((a,b)=>a.name.localeCompare(b.name));
+  renderCustomers();
+});
+
+document.getElementById('clearCustBtn').addEventListener('click', clearCustForm);
+document.getElementById('cancelCustEditBtn').addEventListener('click', clearCustForm);
+document.getElementById('custSearch').addEventListener('input', renderCustomers);
+
+function startEditCust(id) {
+  const c = allCustomers.find(x=>x.id===id); if(!c) return;
+  editingCustId=id;
+  document.getElementById('cName').value=c.name||'';
+  document.getElementById('cStreet').value=c.street||'';
+  document.getElementById('cZip').value=c.zip||'';
+  document.getElementById('cCity').value=c.city||'';
+  document.getElementById('cEmail').value=c.email||'';
+  document.getElementById('cPhone').value=c.phone||'';
+  document.getElementById('cNote').value=c.note||'';
+  document.getElementById('custFormTitle').textContent=`Kunden bearbeiten: ${c.name}`;
+  document.getElementById('cancelCustEditBtn').style.display='';
+  document.getElementById('cName').focus();
+  document.getElementById('cName').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+async function deleteCust(id) {
+  const c = allCustomers.find(x=>x.id===id); if(!c) return;
+  const used = allInvoices.filter(i=>i.customer_id===id).length;
+  if (used>0) { toast(`Kunde wird in ${used} Rechnung(en) verwendet.`,'err'); return; }
+  if (!confirm(`Kunden „${c.name}" wirklich entfernen?`)) return;
+  const { error } = await sb.from('customers').delete().eq('id',id).eq('user_id',currentUser.id);
+  if (error) { toast('Fehler: '+error.message,'err'); return; }
+  allCustomers = allCustomers.filter(x=>x.id!==id);
+  renderCustomers();
+  toast(`Kunde „${c.name}" entfernt.`,'ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ARTICLES
+// ════════════════════════════════════════════════════════════════
+async function loadArticles() {
+  const { data, error } = await sb.from('article_catalog').select('*').eq('user_id',currentUser.id).order('name');
+  if (error) throw error;
+  allArticles = data||[];
+}
+
+function renderArticles() {
+  document.getElementById('artCount').textContent = allArticles.length;
+  const tbody = document.getElementById('artTable');
+  tbody.innerHTML = allArticles.length ? allArticles.map(a=>`
+    <tr>
+      <td><strong>${esc(a.name)}</strong>${a.description?`<br><span class="muted text-sm">${esc(a.description)}</span>`:''}</td>
+      <td>${euro(a.unit_price)}</td>
+      <td>${a.tax_rate} %</td>
+      <td>${esc(a.unit||'Std.')}</td>
+      <td><div class="td-actions">
+        <button class="btn btn-secondary btn-sm" onclick="startEditArt('${a.id}')">Bearbeiten</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteArt('${a.id}')">Löschen</button>
+      </div></td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">Noch keine Artikel.</td></tr>';
+}
+
+function clearArtForm() {
+  ['aName','aDesc','aPrice','aTax','aUnit'].forEach(id=>{
+    const el=document.getElementById(id); if(el){ el.value=(id==='aPrice'?'0':id==='aTax'?'19':id==='aUnit'?'Std.':''); }
+  });
+  document.getElementById('editArtId').value='';
+  editingArtId=null;
+  document.getElementById('artFormTitle').textContent='Neuen Artikel anlegen';
+  document.getElementById('cancelArtEditBtn').style.display='none';
+}
+
+document.getElementById('saveArtBtn').addEventListener('click', async ()=>{
+  const name=document.getElementById('aName').value.trim();
+  if(!name){toast('Bitte einen Artikelnamen eingeben.','err');return;}
+  const row={user_id:currentUser.id,name,description:document.getElementById('aDesc').value.trim(),unit_price:parseFloat(document.getElementById('aPrice').value)||0,tax_rate:parseFloat(document.getElementById('aTax').value)||0,unit:document.getElementById('aUnit').value.trim()||'Std.'};
+  let error;
+  if(editingArtId){
+    ({error}=await sb.from('article_catalog').update(row).eq('id',editingArtId).eq('user_id',currentUser.id));
+    if(!error){const i=allArticles.findIndex(a=>a.id===editingArtId);if(i!==-1)allArticles[i]={...allArticles[i],...row};}
+    toast('Artikel aktualisiert.','ok');
+  } else {
+    const{data,error:e}=await sb.from('article_catalog').insert(row).select().single();
+    error=e; if(!e) allArticles.push(data);
+    toast('Artikel gespeichert.','ok');
+  }
+  if(error){toast('Fehler: '+error.message,'err');return;}
+  clearArtForm(); allArticles.sort((a,b)=>a.name.localeCompare(b.name)); renderArticles();
+});
+
+document.getElementById('clearArtBtn').addEventListener('click',clearArtForm);
+document.getElementById('cancelArtEditBtn').addEventListener('click',clearArtForm);
+
+function startEditArt(id){
+  const a=allArticles.find(x=>x.id===id);if(!a)return;
+  editingArtId=id;
+  document.getElementById('aName').value=a.name||'';
+  document.getElementById('aDesc').value=a.description||'';
+  document.getElementById('aPrice').value=a.unit_price||0;
+  document.getElementById('aTax').value=a.tax_rate||0;
+  document.getElementById('aUnit').value=a.unit||'Std.';
+  document.getElementById('artFormTitle').textContent='Artikel bearbeiten: '+a.name;
+  document.getElementById('cancelArtEditBtn').style.display='';
+  document.getElementById('aName').focus();
+}
+
+async function deleteArt(id){
+  if(!confirm('Artikel wirklich löschen?'))return;
+  const{error}=await sb.from('article_catalog').delete().eq('id',id).eq('user_id',currentUser.id);
+  if(error){toast('Fehler: '+error.message,'err');return;}
+  allArticles=allArticles.filter(x=>x.id!==id); renderArticles(); toast('Artikel gelöscht.','ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DRAFT (NEUE RECHNUNG)
+// ════════════════════════════════════════════════════════════════
+function prepareDraft(){
+  draftItems=[];
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('draftDate').value=today;
+  document.getElementById('draftServiceDate').value=today;
+  document.getElementById('draftNote').value='';
+  document.getElementById('draftType').value='standard';
+  document.getElementById('draftNrBadge').textContent=nextInvNr();
+  document.getElementById('valAlert').style.display='none';
+  fillCustSelect();
+  addPosRow();
+  calcDraft();
+  updateCustPreview();
+}
+
+function addPosRow(data={}){
+  draftItems.push({id:uid(),description:data.description||'',qty:data.qty??1,unitPrice:data.unit_price??0,taxRate:data.taxRate??null});
+  renderPosRows();
+}
+
+function renderPosRows(){
+  const container=document.getElementById('posRows');
+  const isKlein=appSettings?.tax_mode==='kleinunternehmer';
+  container.innerHTML=draftItems.map(item=>{
+    const rate=item.taxRate==null?effectiveTaxRate():Number(item.taxRate);
+    const lineNet=Number(item.qty||0)*Number(item.unitPrice||0);
+    return`<div class="pos-row" id="pr-${item.id}">
+      <div class="field"><label class="label">Beschreibung *</label><input class="input" value="${esc(item.description)}" data-pid="${item.id}" data-field="description" placeholder="Leistung …"></div>
+      <div class="field"><label class="label">Menge</label><input class="input" type="number" step="0.01" min="0" value="${item.qty}" data-pid="${item.id}" data-field="qty"></div>
+      <div class="field"><label class="label">Preis (€ netto)</label><input class="input" type="number" step="0.01" min="0" value="${item.unitPrice}" data-pid="${item.id}" data-field="unitPrice"></div>
+      <div class="field"><label class="label">MwSt %</label><input class="input" type="number" step="1" min="0" value="${isKlein?0:rate}" data-pid="${item.id}" data-field="taxRate" ${isKlein?'disabled':''}></div>
+      <div class="field"><label class="label">Gesamt netto</label><input class="input" value="${euro(lineNet)}" disabled style="background:var(--bg);color:var(--muted)"></div>
+      <div class="field"><label class="label" style="opacity:0">X</label><button class="btn btn-danger btn-icon" data-rm="${item.id}">✕</button></div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('[data-field]').forEach(el=>el.addEventListener('input',e=>{
+    const{pid,field}=e.target.dataset;
+    const item=draftItems.find(x=>x.id===pid); if(!item) return;
+    item[field]=['qty','unitPrice','taxRate'].includes(field)?Number(e.target.value||0):e.target.value;
+    if(field!=='description'){
+      calcDraft();
+      const ln=Number(item.qty||0)*Number(item.unitPrice||0);
+      const row=document.getElementById('pr-'+pid);
+      const dis=row?.querySelector('input[disabled]:not([data-field])');
+      if(dis) dis.value=euro(ln);
+    }
+  }));
+  container.querySelectorAll('[data-rm]').forEach(el=>el.addEventListener('click',()=>{
+    draftItems=draftItems.filter(x=>x.id!==el.dataset.rm);
+    if(draftItems.length===0) addPosRow(); else { renderPosRows(); calcDraft(); }
+  }));
+  calcDraft();
+}
+
+function calcDraft(){
+  const isKlein=appSettings?.tax_mode==='kleinunternehmer';
+  let net=0,tax=0;
+  draftItems.forEach(item=>{
+    const ln=Number(item.qty||0)*Number(item.unitPrice||0);
+    const rate=isKlein?0:(item.taxRate==null?effectiveTaxRate():Number(item.taxRate||0));
+    net+=ln; tax+=ln*rate/100;
+  });
+  const gross=net+tax;
+  document.getElementById('sumNet').textContent=euro(net);
+  document.getElementById('sumTax').textContent=euro(tax);
+  document.getElementById('sumGross').textContent=euro(gross);
+  const hint=document.getElementById('taxHintBox');
+  if(isKlein){hint.className='alert alert-info';hint.textContent='Kleinunternehmer § 19 UStG: Keine Umsatzsteuer.';}
+  else if(gross<=250){hint.className='alert alert-ok';hint.textContent='Kleinbetragsrechnung ≤ 250 €: Kundenanschrift optional.';}
+  else{hint.className='alert alert-warn';hint.textContent='Rechnung > 250 €: Vollständige Kundenanschrift ist Pflicht.';}
+  return{net,tax,gross,isKlein};
+}
+
+document.getElementById('addPosBtn').addEventListener('click',()=>{
+  // Artikel-Auswahl via kleinem Dropdown
+  if(allArticles.length>0){
+    const sel=prompt('Artikel aus Katalog? Gib die Nummer ein (leer lassen für leere Position):\n'+allArticles.map((a,i)=>`${i+1}. ${a.name} – ${euro(a.unit_price)}`).join('\n'));
+    const n=parseInt(sel||'');
+    if(n>=1&&n<=allArticles.length){ const a=allArticles[n-1]; addPosRow({description:a.description||a.name,unit_price:a.unit_price,taxRate:a.tax_rate}); return; }
+  }
+  addPosRow();
+});
+document.getElementById('resetDraftBtn').addEventListener('click',()=>{ if(confirm('Entwurf zurücksetzen?')) prepareDraft(); });
+document.getElementById('draftCustomer').addEventListener('change',updateCustPreview);
+
+function updateCustPreview(){
+  const cid=document.getElementById('draftCustomer')?.value;
+  const c=allCustomers.find(x=>x.id===cid);
+  const box=document.getElementById('custPreview'); if(!box) return;
+  if(!c){box.textContent='Kein Kunde ausgewählt.';return;}
+  box.innerHTML=`<strong>${esc(c.name)}</strong><br>${esc(c.street||'')}<br>${[c.zip,c.city].filter(Boolean).join(' ')}<br>${c.email?esc(c.email):''}`;
+}
+
+function validateDraft(){
+  const errors=[]; const totals=calcDraft();
+  const cid=document.getElementById('draftCustomer').value;
+  const customer=allCustomers.find(c=>c.id===cid)||null;
+  const s=appSettings||{};
+  if(!s.company_name||!s.company_street||!s.company_zip||!s.company_city) errors.push('Unternehmensanschrift unvollständig (Einstellungen prüfen).');
+  if(!s.company_tax_nr&&!s.company_vat_id) errors.push('Steuernummer oder USt-IdNr. fehlt.');
+  if(!document.getElementById('draftDate').value) errors.push('Rechnungsdatum fehlt.');
+  if(!document.getElementById('draftServiceDate').value) errors.push('Leistungsdatum fehlt.');
+  if(draftItems.length===0||draftItems.every(i=>!i.description?.trim())) errors.push('Mindestens eine Position mit Beschreibung erforderlich.');
+  draftItems.forEach((item,idx)=>{
+    if(!item.description?.trim()) errors.push(`Position ${idx+1}: Beschreibung fehlt.`);
+    if(!(Number(item.qty)>0)) errors.push(`Position ${idx+1}: Menge muss > 0 sein.`);
+  });
+  if(totals.gross>250&&(!customer||!customer.name||!customer.street||!customer.zip||!customer.city))
+    errors.push('Bei Rechnungen > 250 € ist vollständige Kundenanschrift Pflicht.');
+  const box=document.getElementById('valAlert');
+  if(errors.length){
+    box.style.display='';
+    box.innerHTML='<strong>Bitte korrigieren:</strong><ul>'+errors.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>';
+    box.scrollIntoView({behavior:'smooth',block:'center'});
+    return{ok:false,totals,customer};
+  }
+  box.style.display='none';
+  return{ok:true,totals,customer};
+}
+
+document.getElementById('saveInvoiceBtn').addEventListener('click', async ()=>{
+  const{ok,totals,customer}=validateDraft(); if(!ok) return;
+  const btn=document.getElementById('saveInvoiceBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern …';
+  try {
+    // Atomare Rechnungsnummer via DB-Funktion
+    const{data:nr,error:nrErr}=await sb.rpc('claim_next_invoice_number',{p_user_id:currentUser.id});
+    if(nrErr) throw nrErr;
+    // Settings-Cache aktualisieren
+    if(appSettings) appSettings.next_number=(appSettings.next_number||1)+1;
+
+    const invRow={
+      user_id:currentUser.id,
+      number:nr,
+      date:document.getElementById('draftDate').value,
+      service_date:document.getElementById('draftServiceDate').value,
+      note:document.getElementById('draftNote').value.trim(),
+      type:document.getElementById('draftType').value,
+      customer_id:customer?.id||null,
+      customer_snap:customer?{...customer}:null,
+      company_snap:{...appSettings},
+      total_net:totals.net,
+      total_tax:totals.tax,
+      total_gross:totals.gross,
+      status:'Erstellt'
+    };
+
+    const{data:inv,error:invErr}=await sb.from('invoices').insert(invRow).select().single();
+    if(invErr) throw invErr;
+
+    // Positionen speichern
+    const itemRows=draftItems.map((item,i)=>({
+      invoice_id:inv.id,
+      user_id:currentUser.id,
+      position:i+1,
+      description:item.description,
+      qty:Number(item.qty),
+      unit_price:Number(item.unitPrice),
+      tax_rate:appSettings?.tax_mode==='kleinunternehmer'?0:Number(item.taxRate??effectiveTaxRate()),
+      total_net:Number(item.qty)*Number(item.unitPrice)
+    }));
+    const{error:itemErr}=await sb.from('invoice_items').insert(itemRows);
+    if(itemErr) throw itemErr;
+
+    // Lokalen Cache updaten
+    allInvoices.unshift({...inv, invoice_items:itemRows});
+
+    // PDF erzeugen und herunterladen
+    generatePDF({...inv, invoice_items:itemRows, customer_snap:customer, company_snap:appSettings}, true);
+
+    toast(`Rechnung ${nr} festgeschrieben & PDF heruntergeladen.`,'ok');
+    switchView('invoices');
+  } catch(e){
+    toast('Fehler: '+e.message,'err');
+  } finally {
+    btn.disabled=false; btn.textContent='Festschreiben & PDF';
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  INVOICES
+// ════════════════════════════════════════════════════════════════
+async function loadInvoices(){
+  const{data,error}=await sb.from('invoices').select('*, invoice_items(*)').eq('user_id',currentUser.id).order('created_at',{ascending:false});
+  if(error) throw error;
+  allInvoices=data||[];
+}
+
+function renderInvoices(){
+  const q=(document.getElementById('invSearch')?.value||'').toLowerCase();
+  const list=allInvoices.filter(inv=>{
+    const hay=[inv.number,inv.customer_snap?.name||'',fmtDate(inv.date),inv.date,inv.status].join(' ').toLowerCase();
+    return !q||hay.includes(q);
+  });
+  const tbody=document.getElementById('invTable');
+  tbody.innerHTML=list.length?list.map(inv=>`
+    <tr id="ir-${inv.id}">
+      <td><span class="inv-nr">${esc(inv.number)}</span></td>
+      <td>${fmtDate(inv.date)}</td>
+      <td>${fmtDate(inv.service_date)}</td>
+      <td>${esc(inv.customer_snap?.name||'–')}</td>
+      <td>${euro(inv.total_net)}</td>
+      <td>${euro(inv.total_tax)}</td>
+      <td><strong>${euro(inv.total_gross)}</strong></td>
+      <td><span class="badge ${inv.status==='Storniert'?'badge-err':'badge-ok'}">${esc(inv.status)}</span></td>
+      <td><div class="td-actions">
+        <button class="btn btn-secondary btn-sm" onclick="downloadPDF('${inv.id}')">PDF</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendEmail('${inv.id}')">E-Mail</button>
+        ${inv.status==='Erstellt'?`<button class="btn btn-danger btn-sm" onclick="openCancelModal('${inv.id}')">Storno</button>`:`<span class="muted text-sm">–</span>`}
+      </div></td>
+    </tr>`).join('')
+    :`<tr><td colspan="9"><div class="empty"><div class="ei">🗂</div><p>${q?'Keine Treffer.':'Noch keine Rechnungen.'}</p></div></td></tr>`;
+}
+
+document.getElementById('invSearch').addEventListener('input', renderInvoices);
+
+// ════════════════════════════════════════════════════════════════
+//  STORNO
+// ════════════════════════════════════════════════════════════════
+function openCancelModal(id){
+  const inv=allInvoices.find(i=>i.id===id); if(!inv) return;
+  cancelTargetId=id;
+  document.getElementById('cancelNr').textContent=inv.number;
+  document.getElementById('cancelReason').value='';
+  document.getElementById('cancelModal').classList.add('open');
+}
+function closeModal(id){ document.getElementById(id)?.classList.remove('open'); }
+
+document.getElementById('confirmCancelBtn').addEventListener('click', async ()=>{
+  const inv=allInvoices.find(i=>i.id===cancelTargetId); if(!inv) return;
+  const reason=document.getElementById('cancelReason').value.trim();
+  const btn=document.getElementById('confirmCancelBtn');
+  btn.disabled=true;
+  const{error}=await sb.from('invoices').update({
+    status:'Storniert',cancelled_at:new Date().toISOString(),cancel_reason:reason
+  }).eq('id',cancelTargetId).eq('user_id',currentUser.id);
+  btn.disabled=false;
+  if(error){toast('Fehler: '+error.message,'err');return;}
+  inv.status='Storniert'; inv.cancelled_at=new Date().toISOString(); inv.cancel_reason=reason;
+  closeModal('cancelModal');
+  renderInvoices();
+  if(currentView==='dashboard') renderDashboard();
+  toast(`Rechnung ${inv.number} storniert.`,'info');
+});
+
+// ════════════════════════════════════════════════════════════════
+//  PDF
+// ════════════════════════════════════════════════════════════════
+function generatePDF(inv, download=false){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const c=inv.company_snap||{}; const cust=inv.customer_snap;
+  const pageW=210; const margin=20; const primRGB=[24,69,196]; const textRGB=[15,22,35]; const mutedRGB=[100,116,139];
+
+  // Header
+  doc.setFillColor(...primRGB); doc.rect(0,0,pageW,26,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text(c.company_name||'Ihr Unternehmen',margin,12);
+  doc.setFontSize(18); doc.text('RECHNUNG',pageW-margin,15,{align:'right'});
+
+  // Absender-Zeile
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...mutedRGB);
+  doc.text([c.company_name,c.company_street,`${c.company_zip||''} ${c.company_city||''}`].filter(Boolean).join(' · '),margin,35);
+
+  // Empfänger
+  doc.setFontSize(10); doc.setTextColor(...textRGB); doc.setFont('helvetica','bold');
+  doc.text('Rechnungsempfänger',margin,44); doc.setFont('helvetica','normal');
+  if(cust){let y=50;if(cust.name){doc.text(cust.name,margin,y);y+=5;}if(cust.street){doc.text(cust.street,margin,y);y+=5;}if(cust.zip||cust.city){doc.text(`${cust.zip||''} ${cust.city||''}`.trim(),margin,y);}}
+  else{doc.setTextColor(...mutedRGB);doc.text('Kleinbetragsrechnung / Laufkunde',margin,50);}
+
+  // Details rechts
+  const detX=pageW-margin; let detY=34;
+  [[' Rechnungsnr.:',inv.number],['Datum:',fmtDate(inv.date)],['Leistung:',fmtDate(inv.service_date)]].forEach(([l,v])=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...mutedRGB); doc.text(l,detX,detY,{align:'right'});
+    doc.setTextColor(...textRGB); doc.text(v,detX,detY+4,{align:'right'}); detY+=10;
+  });
+
+  // Titel
+  doc.setTextColor(...primRGB); doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('Rechnung '+inv.number,margin,80);
+
+  // Tabelle
+  const isKlein=c.tax_mode==='kleinunternehmer';
+  const items=inv.invoice_items||[];
+  const tableBody=items.map(item=>[item.description,String(item.qty),euro(item.unit_price),isKlein?'0 %':`${item.tax_rate} %`,euro(item.total_net)]);
+  doc.autoTable({
+    startY:86,
+    head:[['Leistungsbeschreibung','Menge','Einzelpreis (netto)','MwSt','Gesamt (netto)']],
+    body:tableBody,
+    styles:{font:'helvetica',fontSize:9,cellPadding:{top:5,bottom:5,left:4,right:4},textColor:textRGB},
+    headStyles:{fillColor:primRGB,textColor:[255,255,255],fontStyle:'bold',fontSize:8.5},
+    alternateRowStyles:{fillColor:[248,250,252]},
+    columnStyles:{1:{halign:'center',cellWidth:18},2:{halign:'right',cellWidth:30},3:{halign:'center',cellWidth:16},4:{halign:'right',cellWidth:30}},
+    margin:{left:margin,right:margin}
+  });
+
+  let y=doc.lastAutoTable.finalY+8;
+  const sumX=pageW-margin; const sumLX=sumX-40;
+  [['Nettobetrag:',euro(inv.total_net)],['Umsatzsteuer:',euro(inv.total_tax)]].forEach(([l,v])=>{
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(...mutedRGB); doc.text(l,sumLX,y,{align:'right'});
+    doc.setTextColor(...textRGB); doc.text(v,sumX,y,{align:'right'}); y+=6;
+  });
+  doc.setFillColor(241,245,249); doc.roundedRect(sumLX-22,y-1,sumX-sumLX+26,10,2,2,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...primRGB);
+  doc.text('Gesamtbetrag:',sumLX,y+6,{align:'right'}); doc.text(euro(inv.total_gross),sumX,y+6,{align:'right'}); y+=16;
+
+  doc.setFont('helvetica','italic'); doc.setFontSize(8.5); doc.setTextColor(...mutedRGB);
+  let taxNote=isKlein?'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.':c.tax_mode==='vat7'?'Im ausgewiesenen Betrag sind 7 % Umsatzsteuer enthalten.':'Im ausgewiesenen Betrag sind 19 % Umsatzsteuer enthalten.';
+  doc.text(taxNote,margin,y); y+=7;
+
+  if(inv.note){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...textRGB);const ln=doc.splitTextToSize(inv.note,120);doc.text(ln,margin,y);y+=ln.length*5+5;}
+
+  if(inv.status==='Storniert'){
+    doc.setTextColor(180,35,24); doc.setFont('helvetica','bold'); doc.setFontSize(52);
+    try{doc.setGState(doc.GState({opacity:0.18}));}catch(e){}
+    doc.text('STORNIERT',105,160,{align:'center',angle:30});
+    try{doc.setGState(doc.GState({opacity:1}));}catch(e){}
+    doc.setFontSize(8.5); doc.setFont('helvetica','italic');
+    doc.text(`Storniert am: ${fmtDate((inv.cancelled_at||'').slice(0,10))}${inv.cancel_reason?' · '+inv.cancel_reason:''}`,margin,y);
+  }
+
+  // Footer
+  const footY=270; doc.setDrawColor(226,232,240); doc.setLineWidth(0.3); doc.line(margin,footY,pageW-margin,footY);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...mutedRGB);
+  [c.company_name,c.company_street,`${c.company_zip||''} ${c.company_city||''}`.trim(),c.company_phone,c.company_email].filter(Boolean).forEach((l,i)=>doc.text(l,margin,footY+5+i*4));
+  [c.company_bank?`Bank: ${c.company_bank}`:'',c.company_iban?`IBAN: ${c.company_iban}`:'',c.company_bic?`BIC: ${c.company_bic}`:'',c.company_tax_nr?`StNr: ${c.company_tax_nr}`:'',c.company_vat_id?`USt-IdNr: ${c.company_vat_id}`:''].filter(Boolean).forEach((l,i)=>doc.text(l,pageW-margin,footY+5+i*4,{align:'right'}));
+
+  if(download) doc.save(`${inv.number}.pdf`);
+  return doc;
+}
+
+function downloadPDF(id){
+  const inv=allInvoices.find(i=>i.id===id); if(!inv) return;
+  generatePDF(inv,true); toast(`PDF ${inv.number} heruntergeladen.`,'ok');
+}
+
+function sendEmail(id){
+  const inv=allInvoices.find(i=>i.id===id); if(!inv) return;
+  const to=inv.customer_snap?.email||'';
+  const s=appSettings||{};
+  const sub=encodeURIComponent(interpolateEmail(s.email_subject||'Rechnung {{nummer}}',inv));
+  const body=encodeURIComponent(interpolateEmail(s.email_body||'Rechnung {{nummer}} vom {{datum}} über {{betrag}}.',inv));
+  window.location.href=`mailto:${to}?subject=${sub}&body=${body}`;
+  toast('E-Mail-Client wird geöffnet …','info');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CSV EXPORT
+// ════════════════════════════════════════════════════════════════
+function exportCSV(){
+  const rows=[['Nr.','Datum','Leistungsdatum','Kunde','Netto','Steuer','Brutto','Status','Storniert am','Grund']];
+  allInvoices.forEach(inv=>rows.push([inv.number,inv.date,inv.service_date,inv.customer_snap?.name||'',inv.total_net,inv.total_tax,inv.total_gross,inv.status,inv.cancelled_at?.slice(0,10)||'',inv.cancel_reason||'']));
+  const bom='\uFEFF';
+  const csv=bom+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`rechnungen-${new Date().toISOString().slice(0,10)}.csv`; a.click(); toast('CSV exportiert.','ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════════════
+function renderDashboard(){
+  const active=allInvoices.filter(i=>i.status==='Erstellt');
+  const cancelled=allInvoices.filter(i=>i.status==='Storniert');
+  document.getElementById('kpiTotal').textContent=allInvoices.length;
+  document.getElementById('kpiActive').textContent=active.length;
+  document.getElementById('kpiCancelled').textContent=cancelled.length;
+  document.getElementById('kpiRevenue').textContent=euro(active.reduce((s,i)=>s+Number(i.total_gross),0));
+
+  document.getElementById('dashRecent').innerHTML=active.slice(0,6).map(inv=>`
+    <tr>
+      <td><span class="inv-nr" style="font-size:11px">${esc(inv.number)}</span></td>
+      <td>${esc(inv.customer_snap?.name||'–')}</td>
+      <td>${fmtDate(inv.date)}</td>
+      <td><strong>${euro(inv.total_gross)}</strong></td>
+      <td><span class="badge badge-ok">Erstellt</span></td>
+    </tr>`).join('')||'<tr><td colspan="5" class="empty">Noch keine Rechnungen.</td></tr>';
+
+  buildChart();
+}
+
+function buildChart(){
+  const canvas=document.getElementById('revenueChart'); if(!canvas) return;
+  const monthMap={};
+  allInvoices.filter(i=>i.status==='Erstellt').forEach(inv=>{
+    const key=inv.date?.slice(0,7); if(!key) return;
+    monthMap[key]=(monthMap[key]||0)+Number(inv.total_gross);
+  });
+  const months=[];const now=new Date();
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);}
+  const labels=months.map(m=>{const[y,mo]=m.split('-');return new Date(+y,+mo-1,1).toLocaleString('de-DE',{month:'short',year:'2-digit'});});
+  const data=months.map(m=>monthMap[m]||0);
+  if(revenueChart) revenueChart.destroy();
+  revenueChart=new Chart(canvas,{
+    type:'bar',data:{labels,datasets:[{label:'Umsatz',data,backgroundColor:'rgba(24,69,196,0.15)',borderColor:'rgba(24,69,196,0.8)',borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>euro(ctx.raw)}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>euro(v),font:{size:10}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:10}},grid:{display:false}}}}
+  });
+}
+
+// ── Session prüfen beim Laden ──
+(async ()=>{
+  showLoading('Prüfe Sitzung …');
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session) hideLoading();
+})();
+</script>
+</body>
+</html>
